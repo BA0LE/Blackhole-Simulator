@@ -1,5 +1,5 @@
 # Black Hole Simulator
-## CAUTION: this is my repo, i just copy + parse it from my second account ![BA0LE](https://github.com/BA0LE)
+## CAUTION: this is my repo, i just copy + paste it from my second account ![BA0LE](https://github.com/BA0LE)
 A real-time 3D black hole physics simulator built with Python and Pygame, featuring gravitational lensing, accretion disk dynamics, N-body black hole interactions, and tidal disruption events.
 
 ---
