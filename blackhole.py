@@ -1,5 +1,5 @@
 """
-blackhole.py — v6: BlackHoleBody class.
+blackhole.py — v7: BlackHoleBody class.
 
 Each BlackHoleBody is a fully dynamic gravitating object with:
   • 3D position and velocity in world (pixel) space

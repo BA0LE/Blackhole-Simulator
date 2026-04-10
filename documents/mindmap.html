@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Black Hole Simulator — Function Dependency Map</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #04050d;
+    --bg2: #080b18;
+    --text: #c8d8f0;
+    --dim: #4a5a7a;
+    --accent: #00e5ff;
+
+    --col-main:       #ff6b35;
+    --col-blackhole:  #bf40ff;
+    --col-camera:     #00e5ff;
+    --col-computer:   #ffd166;
+    --col-config:     #06d6a0;
+    --col-physics:    #ff4d6d;
+    --col-renderer:   #4cc9f0;
+    --col-simulation: #f72585;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  canvas#stars {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  }
+
+  #app {
+    position: relative; z-index: 1;
+    width: 100vw; height: 100vh;
+    display: flex; flex-direction: column;
+  }
+
+  header {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px;
+    background: linear-gradient(180deg, rgba(8,11,24,0.95) 0%, rgba(8,11,24,0) 100%);
+    border-bottom: 1px solid rgba(0,229,255,0.1);
+  }
+
+  .title-group h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 15px; font-weight: 900;
+    letter-spacing: 3px;
+    background: linear-gradient(90deg, var(--accent), #bf40ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .title-group p {
+    font-size: 9px; color: var(--dim); letter-spacing: 2px; margin-top: 2px;
+  }
+
+  .legend {
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 9px; letter-spacing: 1px; color: var(--text); opacity: 0.8;
+    cursor: pointer; transition: opacity 0.2s;
+    padding: 3px 7px; border-radius: 3px;
+    border: 1px solid transparent;
+  }
+  .legend-item:hover { opacity: 1; border-color: rgba(255,255,255,0.2); }
+  .legend-item.muted { opacity: 0.25; }
+  .legend-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    box-shadow: 0 0 5px currentColor;
+  }
+
+  .controls {
+    display: flex; gap: 8px; align-items: center;
+    font-size: 9px; color: var(--dim);
+  }
+  .ctrl-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text); font-family: inherit; font-size: 9px;
+    padding: 4px 10px; border-radius: 3px; cursor: pointer;
+    letter-spacing: 1px; transition: all 0.2s;
+  }
+  .ctrl-btn:hover { background: rgba(0,229,255,0.12); border-color: var(--accent); }
+
+  #graph-container {
+    flex: 1; position: relative; overflow: hidden;
+  }
+
+  svg { width: 100%; height: 100%; }
+
+  /* cluster hulls */
+  .hull {
+    fill-opacity: 0.07;
+    stroke-width: 2;
+    stroke-opacity: 0.25;
+    stroke-dasharray: 6 4;
+  }
+  .hull-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 2px; opacity: 0.6;
+    text-transform: uppercase;
+  }
+
+  /* edges */
+  .link {
+    fill: none;
+    stroke-opacity: 0.45;
+    transition: stroke-opacity 0.2s;
+  }
+  .link.highlighted { stroke-opacity: 1; }
+  .link.dimmed { stroke-opacity: 0.05; }
+
+  /* nodes */
+  .node { cursor: pointer; }
+  .node circle {
+    stroke-width: 1.5;
+    transition: r 0.2s, filter 0.2s;
+  }
+  .node.highlighted circle {
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+  .node.dimmed { opacity: 0.12; }
+
+  .node-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7px; font-weight: 400;
+    fill: rgba(200,216,240,0.85);
+    text-anchor: middle;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .node-label.highlighted { fill: #fff; font-weight: 600; font-size: 8px; }
+
+  /* tooltip */
+  #tooltip {
+    position: absolute;
+    background: rgba(8,11,24,0.96);
+    border: 1px solid rgba(0,229,255,0.3);
+    border-radius: 6px;
+    padding: 10px 14px;
+    pointer-events: none;
+    display: none;
+    max-width: 260px;
+    z-index: 100;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,229,255,0.1);
+  }
+  #tooltip .tt-name {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px; font-weight: 700; margin-bottom: 4px;
+  }
+  #tooltip .tt-class {
+    font-size: 8px; opacity: 0.6; margin-bottom: 6px; letter-spacing: 1px;
+  }
+  #tooltip .tt-calls {
+    font-size: 8px; line-height: 1.8;
+  }
+  #tooltip .tt-calls span { opacity: 0.6; }
+
+  .stats-bar {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 20px;
+    background: rgba(8,11,24,0.85);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px; padding: 6px 20px;
+    font-size: 9px; color: var(--dim);
+  }
+  .stats-bar strong { color: var(--accent); }
+
+  .hint {
+    position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; color: var(--dim); letter-spacing: 1px;
+    opacity: 0.6; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<div id="app">
+  <header>
+    <div class="title-group">
+      <h1>BLACK HOLE SIMULATOR</h1>
+      <p>FUNCTION DEPENDENCY MIND MAP — 8 MODULES · FULL CALL GRAPH</p>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="controls">
+      <button class="ctrl-btn" id="btn-reset">⟳ RESET VIEW</button>
+      <button class="ctrl-btn" id="btn-labels">LABELS ON</button>
+    </div>
+  </header>
+  <div id="graph-container">
+    <svg id="svg"></svg>
+    <div id="tooltip"></div>
+    <div class="hint">Scroll: zoom · Drag: pan · Click node: highlight subgraph · Click legend: filter</div>
+    <div class="stats-bar">
+      <span><strong id="s-nodes">0</strong> functions</span>
+      <span><strong id="s-edges">0</strong> call edges</span>
+      <span><strong id="s-files">8</strong> modules</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Star field canvas ──────────────────────────────────────────────────────
+(function() {
+  const c = document.getElementById('stars');
+  c.width = window.innerWidth; c.height = window.innerHeight;
+  const ctx = c.getContext('2d');
+  const stars = Array.from({length: 200}, () => ({
+    x: Math.random()*c.width, y: Math.random()*c.height,
+    r: Math.random()*1.2+0.2, a: Math.random()*0.4+0.1
+  }));
+  stars.forEach(s => {
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(200,220,255,${s.a})`; ctx.fill();
+  });
+})();
+
+// ─── DATA DEFINITION ────────────────────────────────────────────────────────
+const FILES = {
+  main:       { label: 'main_v7.py',   color: '#ff6b35', cx: 0.50, cy: 0.08 },
+  blackhole:  { label: 'blackhole.py', color: '#bf40ff', cx: 0.82, cy: 0.28 },
+  camera:     { label: 'camera.py',    color: '#00e5ff', cx: 0.88, cy: 0.62 },
+  computer:   { label: 'computer.py',  color: '#ffd166', cx: 0.62, cy: 0.90 },
+  config:     { label: 'config.py',    color: '#06d6a0', cx: 0.18, cy: 0.90 },
+  physics:    { label: 'physics.py',   color: '#ff4d6d', cx: 0.35, cy: 0.72 },
+  renderer:   { label: 'renderer.py',  color: '#4cc9f0', cx: 0.12, cy: 0.38 },
+  simulation: { label: 'simulation.py',color: '#f72585', cx: 0.62, cy: 0.48 },
+};
+
+const CLASSES = {
+  // main_v7
+  'main':         { file: 'main',       label: 'module' },
+  // blackhole
+  'BlackHoleBody':{ file: 'blackhole',  label: 'class' },
+  // camera
+  'Camera3D':     { file: 'camera',     label: 'class' },
+  // computer
+  'Computer':     { file: 'computer',   label: 'class' },
+  // config
+  'Config':       { file: 'config',     label: 'class' },
+  // physics
+  'Physics':      { file: 'physics',    label: 'class' },
+  // renderer
+  'Renderer':     { file: 'renderer',   label: 'class' },
+  // simulation
+  'AccretionDisk':{ file: 'simulation', label: 'class' },
+  'FreeParticles':{ file: 'simulation', label: 'class' },
+  'CelestialBody':{ file: 'simulation', label: 'class' },
+  'GasPlanet':    { file: 'simulation', label: 'class' },
+};
+
+const RAW_NODES = [
+  // main_v7.py
+  { id:'main_build',     label:'build_initial\nbh_list',   cls:'main',         file:'main' },
+  { id:'main_spawn',     label:'spawn_bh_at\ncamera',      cls:'main',         file:'main' },
+  { id:'main_panel',     label:'_panel_adjust',            cls:'main',         file:'main' },
+  { id:'main_resync',    label:'_resync_disk',             cls:'main',         file:'main' },
+  { id:'main_onconfig',  label:'_on_config\nchange',       cls:'main',         file:'main' },
+  { id:'main_main',      label:'main()',                   cls:'main',         file:'main', important: true },
+
+  // blackhole.py
+  { id:'bh_init',        label:'__init__',                 cls:'BlackHoleBody',file:'blackhole' },
+  { id:'bh_recompute',   label:'_recompute',               cls:'BlackHoleBody',file:'blackhole' },
+  { id:'bh_update',      label:'update',                   cls:'BlackHoleBody',file:'blackhole' },
+  { id:'bh_try_merge',   label:'try_merge',                cls:'BlackHoleBody',file:'blackhole' },
+  { id:'bh_accrete',     label:'accrete',                  cls:'BlackHoleBody',file:'blackhole' },
+
+  // camera.py
+  { id:'cam_init',       label:'__init__',                 cls:'Camera3D',     file:'camera' },
+  { id:'cam_rotate',     label:'rotate',                   cls:'Camera3D',     file:'camera' },
+  { id:'cam_move',       label:'move',                     cls:'Camera3D',     file:'camera' },
+  { id:'cam_basis',      label:'_basis',                   cls:'Camera3D',     file:'camera', important: true },
+  { id:'cam_projparams', label:'_proj_params',             cls:'Camera3D',     file:'camera' },
+  { id:'cam_screenr',    label:'get_screen\nradius',       cls:'Camera3D',     file:'camera' },
+  { id:'cam_proj1',      label:'project_single',           cls:'Camera3D',     file:'camera', important: true },
+  { id:'cam_projbatch',  label:'project_batch',            cls:'Camera3D',     file:'camera', important: true },
+
+  // computer.py
+  { id:'cmp_init',       label:'__init__',                 cls:'Computer',     file:'computer' },
+  { id:'cmp_schwarz',    label:'schwarzschild\nradius',    cls:'Computer',     file:'computer' },
+  { id:'cmp_gravforce',  label:'gravity_force',            cls:'Computer',     file:'computer' },
+  { id:'cmp_accel',      label:'acceleration',             cls:'Computer',     file:'computer' },
+  { id:'cmp_photon',     label:'photon_sphere',            cls:'Computer',     file:'computer' },
+  { id:'cmp_deflect',    label:'light_deflection',         cls:'Computer',     file:'computer' },
+  { id:'cmp_spline',     label:'CubicSpline',              cls:'Computer',     file:'computer', important: true },
+
+  // config.py
+  { id:'cfg_Config',     label:'Config',                   cls:'Config',       file:'config',   important: true },
+
+  // physics.py
+  { id:'ph_init',        label:'__init__',                 cls:'Physics',      file:'physics' },
+  { id:'ph_updateprops', label:'update_properties',        cls:'Physics',      file:'physics', important: true },
+  { id:'ph_multiaccel',  label:'multi_bh_accel',           cls:'Physics',      file:'physics', important: true },
+  { id:'ph_multisingle', label:'multi_bh_accel\nsingle',   cls:'Physics',      file:'physics', important: true },
+  { id:'ph_circL',       label:'circular_L',               cls:'Physics',      file:'physics' },
+  { id:'ph_geodesic',    label:'geodesic_accel',           cls:'Physics',      file:'physics' },
+  { id:'ph_rk4',         label:'rk4_step',                 cls:'Physics',      file:'physics' },
+  { id:'ph_disktemp',    label:'disk_temperature',         cls:'Physics',      file:'physics' },
+  { id:'ph_temprgb',     label:'temperature\nto_rgb',      cls:'Physics',      file:'physics' },
+  { id:'ph_redshift',    label:'grav_redshift',            cls:'Physics',      file:'physics' },
+  { id:'ph_doppler',     label:'doppler_shift',            cls:'Physics',      file:'physics' },
+  { id:'ph_lensall',     label:'lens_all',                 cls:'Physics',      file:'physics' },
+  { id:'ph_lensstars',   label:'lens_stars',               cls:'Physics',      file:'physics' },
+
+  // renderer.py
+  { id:'rnd_init',       label:'__init__',                 cls:'Renderer',     file:'renderer' },
+  { id:'rnd_rebstars',   label:'rebuild_stars',            cls:'Renderer',     file:'renderer' },
+  { id:'rnd_scatter',    label:'_scatter',                 cls:'Renderer',     file:'renderer' },
+  { id:'rnd_lensing',    label:'_apply_lensing',           cls:'Renderer',     file:'renderer' },
+  { id:'rnd_stars',      label:'_draw_stars',              cls:'Renderer',     file:'renderer' },
+  { id:'rnd_particles',  label:'_draw_particles',          cls:'Renderer',     file:'renderer', important: true },
+  { id:'rnd_photon',     label:'_draw_photon\nring',       cls:'Renderer',     file:'renderer' },
+  { id:'rnd_celestial',  label:'_draw_celestial\nbody',    cls:'Renderer',     file:'renderer' },
+  { id:'rnd_alphapoly',  label:'_draw_alpha\npolygon',     cls:'Renderer',     file:'renderer' },
+  { id:'rnd_flash',      label:'_draw_merger\nflash',      cls:'Renderer',     file:'renderer' },
+  { id:'rnd_bloom',      label:'_bloom',                   cls:'Renderer',     file:'renderer' },
+  { id:'rnd_panel',      label:'draw_config\npanel',       cls:'Renderer',     file:'renderer' },
+  { id:'rnd_hud',        label:'_hud',                     cls:'Renderer',     file:'renderer' },
+  { id:'rnd_render',     label:'render()',                 cls:'Renderer',     file:'renderer', important: true },
+
+  // simulation.py — AccretionDisk
+  { id:'disk_init',      label:'__init__',                 cls:'AccretionDisk',file:'simulation' },
+  { id:'disk_rebuild',   label:'rebuild',                  cls:'AccretionDisk',file:'simulation' },
+  { id:'disk_compdyn',   label:'_compute\ndynamics',       cls:'AccretionDisk',file:'simulation' },
+  { id:'disk_resync',    label:'resync',                   cls:'AccretionDisk',file:'simulation' },
+  { id:'disk_update',    label:'update',                   cls:'AccretionDisk',file:'simulation' },
+  { id:'disk_pos3d',     label:'positions_3d',             cls:'AccretionDisk',file:'simulation' },
+  { id:'disk_colors',    label:'colors_frame',             cls:'AccretionDisk',file:'simulation' },
+
+  // simulation.py — FreeParticles
+  { id:'fp_init',        label:'__init__',                 cls:'FreeParticles',file:'simulation' },
+  { id:'fp_selfaccel',   label:'_particle_self\naccel',    cls:'FreeParticles',file:'simulation' },
+  { id:'fp_update',      label:'update',                   cls:'FreeParticles',file:'simulation', important: true },
+  { id:'fp_absorb',      label:'absorb_disk',              cls:'FreeParticles',file:'simulation' },
+  { id:'fp_pos3d',       label:'positions_3d',             cls:'FreeParticles',file:'simulation' },
+  { id:'fp_colors',      label:'colors_frame',             cls:'FreeParticles',file:'simulation' },
+  { id:'fp_sizes',       label:'sizes_frame',              cls:'FreeParticles',file:'simulation' },
+
+  // simulation.py — CelestialBody
+  { id:'cb_init',        label:'__init__',                 cls:'CelestialBody',file:'simulation' },
+  { id:'cb_respawn',     label:'_do_respawn',              cls:'CelestialBody',file:'simulation' },
+  { id:'cb_update',      label:'update',                   cls:'CelestialBody',file:'simulation' },
+  { id:'cb_silhouette',  label:'get_silhouette\npoints',   cls:'CelestialBody',file:'simulation' },
+
+  // simulation.py — GasPlanet
+  { id:'gp_update',      label:'update',                   cls:'GasPlanet',    file:'simulation' },
+  { id:'gp_emit',        label:'_emit_particles',          cls:'GasPlanet',    file:'simulation' },
+];
+
+const RAW_EDGES = [
+  // ── main_v7 ────────────────────────────────────────────────────────────────
+  { s:'main_build',    t:'bh_init',       w:3 },
+  { s:'main_spawn',    t:'bh_init',       w:2 },
+  { s:'main_spawn',    t:'cam_basis',     w:2 },
+  { s:'main_resync',   t:'disk_resync',   w:3 },
+  { s:'main_onconfig', t:'fp_absorb',     w:2 },
+  { s:'main_onconfig', t:'disk_rebuild',  w:2 },
+  { s:'main_onconfig', t:'rnd_rebstars',  w:2 },
+  { s:'main_main',     t:'main_build',    w:2 },
+  { s:'main_main',     t:'bh_update',     w:5 },
+  { s:'main_main',     t:'bh_try_merge',  w:4 },
+  { s:'main_main',     t:'bh_recompute',  w:3 },
+  { s:'main_main',     t:'disk_update',   w:4 },
+  { s:'main_main',     t:'fp_update',     w:4 },
+  { s:'main_main',     t:'cb_update',     w:3 },
+  { s:'main_main',     t:'gp_update',     w:3 },
+  { s:'main_main',     t:'rnd_render',    w:5 },
+  { s:'main_main',     t:'cfg_Config',    w:4 },
+  { s:'main_panel',    t:'cfg_Config',    w:4 },
+
+  // ── BlackHoleBody ──────────────────────────────────────────────────────────
+  { s:'bh_init',       t:'bh_recompute',  w:5 },
+  { s:'bh_init',       t:'cfg_Config',    w:4 },
+  { s:'bh_update',     t:'cfg_Config',    w:3 },
+  { s:'bh_try_merge',  t:'bh_recompute',  w:3 },
+  { s:'bh_accrete',    t:'bh_recompute',  w:4 },
+
+  // ── Camera3D ───────────────────────────────────────────────────────────────
+  { s:'cam_proj1',     t:'cam_basis',     w:4 },
+  { s:'cam_proj1',     t:'cam_projparams',w:4 },
+  { s:'cam_projbatch', t:'cam_basis',     w:5 },
+  { s:'cam_projbatch', t:'cam_projparams',w:5 },
+  { s:'cam_move',      t:'cam_basis',     w:3 },
+  { s:'cam_screenr',   t:'cam_projparams',w:3 },
+
+  // ── Physics ────────────────────────────────────────────────────────────────
+  { s:'ph_init',       t:'cmp_init',      w:4 },
+  { s:'ph_init',       t:'ph_updateprops',w:4 },
+  { s:'ph_updateprops',t:'cfg_Config',    w:4 },
+  { s:'ph_rk4',        t:'ph_geodesic',   w:5 },
+
+  // ── AccretionDisk ──────────────────────────────────────────────────────────
+  { s:'disk_init',     t:'ph_updateprops',w:3 },
+  { s:'disk_init',     t:'disk_rebuild',  w:4 },
+  { s:'disk_rebuild',  t:'disk_compdyn',  w:4 },
+  { s:'disk_rebuild',  t:'cfg_Config',    w:3 },
+  { s:'disk_compdyn',  t:'ph_disktemp',   w:4 },
+  { s:'disk_compdyn',  t:'ph_temprgb',    w:4 },
+  { s:'disk_compdyn',  t:'ph_redshift',   w:3 },
+  { s:'disk_resync',   t:'ph_updateprops',w:3 },
+  { s:'disk_resync',   t:'disk_compdyn',  w:4 },
+  { s:'disk_update',   t:'disk_resync',   w:2 },
+  { s:'disk_colors',   t:'ph_doppler',    w:4 },
+  { s:'disk_colors',   t:'cfg_Config',    w:3 },
+
+  // ── FreeParticles ──────────────────────────────────────────────────────────
+  { s:'fp_update',     t:'ph_multiaccel', w:5 },
+  { s:'fp_update',     t:'fp_selfaccel',  w:3 },
+  { s:'fp_update',     t:'bh_accrete',    w:3 },
+  { s:'fp_sizes',      t:'cam_basis',     w:3 },
+  { s:'fp_absorb',     t:'disk_pos3d',    w:2 },
+
+  // ── CelestialBody ──────────────────────────────────────────────────────────
+  { s:'cb_update',     t:'ph_multisingle',w:4 },
+  { s:'cb_update',     t:'bh_accrete',    w:3 },
+  { s:'cb_update',     t:'cb_respawn',    w:2 },
+  { s:'cb_update',     t:'cfg_Config',    w:4 },
+
+  // ── GasPlanet ──────────────────────────────────────────────────────────────
+  { s:'gp_update',     t:'cb_update',     w:5 },
+  { s:'gp_update',     t:'gp_emit',       w:3 },
+  { s:'gp_emit',       t:'cfg_Config',    w:2 },
+
+  // ── Renderer ───────────────────────────────────────────────────────────────
+  { s:'rnd_init',      t:'rnd_rebstars',  w:3 },
+  { s:'rnd_init',      t:'cfg_Config',    w:3 },
+  { s:'rnd_render',    t:'cam_proj1',     w:4 },
+  { s:'rnd_render',    t:'cam_screenr',   w:4 },
+  { s:'rnd_render',    t:'rnd_stars',     w:4 },
+  { s:'rnd_render',    t:'rnd_particles', w:4 },
+  { s:'rnd_render',    t:'rnd_photon',    w:3 },
+  { s:'rnd_render',    t:'rnd_celestial', w:3 },
+  { s:'rnd_render',    t:'rnd_flash',     w:2 },
+  { s:'rnd_render',    t:'rnd_bloom',     w:4 },
+  { s:'rnd_render',    t:'rnd_hud',       w:4 },
+  { s:'rnd_render',    t:'rnd_panel',     w:2 },
+  { s:'rnd_stars',     t:'cam_projbatch', w:4 },
+  { s:'rnd_stars',     t:'rnd_lensing',   w:4 },
+  { s:'rnd_particles', t:'cam_projbatch', w:5 },
+  { s:'rnd_particles', t:'rnd_lensing',   w:4 },
+  { s:'rnd_particles', t:'rnd_scatter',   w:5 },
+  { s:'rnd_particles', t:'disk_pos3d',    w:4 },
+  { s:'rnd_particles', t:'disk_colors',   w:4 },
+  { s:'rnd_particles', t:'fp_pos3d',      w:4 },
+  { s:'rnd_particles', t:'fp_colors',     w:4 },
+  { s:'rnd_photon',    t:'cam_projbatch', w:4 },
+  { s:'rnd_photon',    t:'disk_pos3d',    w:4 },
+  { s:'rnd_photon',    t:'disk_colors',   w:4 },
+  { s:'rnd_celestial', t:'cam_proj1',     w:3 },
+  { s:'rnd_celestial', t:'cam_projbatch', w:3 },
+  { s:'rnd_celestial', t:'ph_lensall',    w:3 },
+  { s:'rnd_celestial', t:'cmp_spline',    w:3 },
+  { s:'rnd_celestial', t:'rnd_alphapoly', w:4 },
+  { s:'rnd_flash',     t:'cam_proj1',     w:3 },
+  { s:'rnd_flash',     t:'cam_screenr',   w:3 },
+];
+
+// ─── BUILD GRAPH ─────────────────────────────────────────────────────────────
+const W = () => document.getElementById('graph-container').clientWidth;
+const H = () => document.getElementById('graph-container').clientHeight;
+
+let showLabels = true;
+let activeFiles = new Set(Object.keys(FILES));
+
+// count in/out degrees for size scaling
+const inDeg = {}, outDeg = {};
+RAW_NODES.forEach(n => { inDeg[n.id]=0; outDeg[n.id]=0; });
+RAW_EDGES.forEach(e => { outDeg[e.s]=(outDeg[e.s]||0)+1; inDeg[e.t]=(inDeg[e.t]||0)+1; });
+
+const nodes = RAW_NODES.map(n => ({
+  ...n,
+  color: FILES[n.file].color,
+  r: n.important ? 9 : Math.max(5, Math.min(8, 5 + (inDeg[n.id]||0)*0.5)),
+}));
+
+const links = RAW_EDGES.map(e => ({
+  source: e.s, target: e.t, weight: e.w,
+  color: FILES[RAW_NODES.find(n=>n.id===e.s).file].color,
+}));
+
+document.getElementById('s-nodes').textContent = nodes.length;
+document.getElementById('s-edges').textContent = links.length;
+
+// ─── SVG SETUP ───────────────────────────────────────────────────────────────
+const svg = d3.select('#svg');
+const gAll = svg.append('g').attr('id','gAll');
+
+// arrowhead markers per file
+Object.entries(FILES).forEach(([key, f]) => {
+  svg.append('defs').append('marker')
+    .attr('id', 'arrow-'+key)
+    .attr('viewBox', '0 -4 10 8')
+    .attr('refX', 18).attr('refY', 0)
+    .attr('markerWidth', 5).attr('markerHeight', 5)
+    .attr('orient', 'auto')
+    .append('path')
+      .attr('d', 'M0,-4L10,0L0,4')
+      .attr('fill', f.color)
+      .attr('opacity', 0.7);
+});
+
+const gHulls = gAll.append('g').attr('id','hulls');
+const gLinks = gAll.append('g').attr('id','links');
+const gNodes = gAll.append('g').attr('id','nodes');
+
+// zoom
+const zoom = d3.zoom()
+  .scaleExtent([0.15, 4])
+  .on('zoom', e => gAll.attr('transform', e.transform));
+svg.call(zoom);
+
+// ─── LEGEND ──────────────────────────────────────────────────────────────────
+const legendEl = document.getElementById('legend');
+Object.entries(FILES).forEach(([key, f]) => {
+  const item = document.createElement('div');
+  item.className = 'legend-item'; item.dataset.file = key;
+  item.innerHTML = `<span class="legend-dot" style="background:${f.color};color:${f.color}"></span>${f.label}`;
+  item.addEventListener('click', () => toggleFile(key, item));
+  legendEl.appendChild(item);
+});
+
+function toggleFile(key, el) {
+  if (activeFiles.has(key)) activeFiles.delete(key);
+  else activeFiles.add(key);
+  el.classList.toggle('muted', !activeFiles.has(key));
+  filterGraph();
+}
+
+// ─── FORCE SIMULATION ────────────────────────────────────────────────────────
+const cw = W(), ch = H();
+
+// Pre-position nodes near cluster center
+nodes.forEach(n => {
+  const f = FILES[n.file];
+  n.x = f.cx * cw + (Math.random()-.5)*120;
+  n.y = f.cy * ch + (Math.random()-.5)*120;
+});
+
+const simulation = d3.forceSimulation(nodes)
+  .force('link', d3.forceLink(links).id(d=>d.id).distance(d=>60+d.weight*8).strength(0.5))
+  .force('charge', d3.forceManyBody().strength(-260).distanceMax(350))
+  .force('collide', d3.forceCollide(d=>d.r+10))
+  .force('cluster', () => {
+    nodes.forEach(n => {
+      const f = FILES[n.file];
+      const tx = f.cx*cw, ty = f.cy*ch;
+      const alpha = simulation.alpha();
+      n.vx += (tx - n.x) * 0.04 * alpha;
+      n.vy += (ty - n.y) * 0.04 * alpha;
+    });
+  });
+
+// ─── LINK ELEMENTS ───────────────────────────────────────────────────────────
+const linkSel = gLinks.selectAll('line')
+  .data(links).join('line')
+  .attr('class','link')
+  .attr('stroke', d => d.color)
+  .attr('stroke-width', d => Math.max(0.5, d.weight*0.55))
+  .attr('marker-end', d => {
+    const srcNode = nodes.find(n=>n.id===(d.source.id||d.source));
+    return srcNode ? 'url(#arrow-'+srcNode.file+')' : '';
+  });
+
+// ─── NODE ELEMENTS ────────────────────────────────────────────────────────────
+const nodeSel = gNodes.selectAll('g')
+  .data(nodes).join('g')
+  .attr('class','node')
+  .call(d3.drag()
+    .on('start', (e,d) => { if(!e.active) simulation.alphaTarget(0.2).restart(); d.fx=d.x; d.fy=d.y; })
+    .on('drag',  (e,d) => { d.fx=e.x; d.fy=e.y; })
+    .on('end',   (e,d) => { if(!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; })
+  )
+  .on('click', (e,d) => { e.stopPropagation(); highlightNode(d); })
+  .on('mouseover', (e,d) => showTooltip(e,d))
+  .on('mousemove', moveTooltip)
+  .on('mouseout', hideTooltip);
+
+nodeSel.append('circle')
+  .attr('r', d=>d.r)
+  .attr('fill', d=>d.color+'22')
+  .attr('stroke', d=>d.color);
+
+// add class indicator ring for subclasses
+nodeSel.filter(d=>d.cls !== 'main' && d.cls !== 'Config')
+  .append('circle')
+  .attr('r', d=>d.r+3)
+  .attr('fill','none')
+  .attr('stroke', d=>d.color+'44')
+  .attr('stroke-width', 0.5)
+  .attr('stroke-dasharray','2 3');
+
+const labelSel = nodeSel.append('text')
+  .attr('class','node-label')
+  .attr('y', d=>d.r+10)
+  .each(function(d) {
+    const lines = d.label.split('\n');
+    d3.select(this).selectAll('tspan')
+      .data(lines).join('tspan')
+      .attr('x', 0).attr('dy', (_, i) => i===0 ? 0 : 9)
+      .text(v=>v);
+  });
+
+svg.on('click', clearHighlight);
+
+// ─── HULL (convex hull per file) ──────────────────────────────────────────────
+function drawHulls() {
+  const byFile = {};
+  nodes.forEach(n => {
+    if (!byFile[n.file]) byFile[n.file] = [];
+    byFile[n.file].push([n.x, n.y]);
+  });
+
+  gHulls.selectAll('.hull-group').remove();
+
+  Object.entries(byFile).forEach(([fkey, pts]) => {
+    if (!activeFiles.has(fkey)) return;
+    const f = FILES[fkey];
+    if (pts.length < 3) return;
+    const hull = d3.polygonHull(pts);
+    if (!hull) return;
+
+    const pad = 28;
+    const cx = d3.mean(hull, p=>p[0]);
+    const cy = d3.mean(hull, p=>p[1]);
+    const padded = hull.map(p => {
+      const dx=p[0]-cx, dy=p[1]-cy;
+      const dist=Math.sqrt(dx*dx+dy*dy)||1;
+      return [p[0]+dx/dist*pad, p[1]+dy/dist*pad];
+    });
+
+    const grp = gHulls.append('g').attr('class','hull-group');
+    grp.append('path')
+      .attr('class','hull')
+      .attr('d', 'M'+padded.map(p=>p.join(',')).join('L')+'Z')
+      .attr('fill', f.color)
+      .attr('stroke', f.color);
+
+    const lx = d3.min(padded, p=>p[0]);
+    const ly = d3.min(padded, p=>p[1]);
+    grp.append('text')
+      .attr('class','hull-label')
+      .attr('x', lx+8).attr('y', ly-6)
+      .attr('fill', f.color)
+      .text(f.label);
+  });
+}
+
+// ─── SIMULATION TICK ──────────────────────────────────────────────────────────
+simulation.on('tick', () => {
+  linkSel
+    .attr('x1', d=>d.source.x).attr('y1', d=>d.source.y)
+    .attr('x2', d=>d.target.x).attr('y2', d=>d.target.y);
+
+  nodeSel.attr('transform', d=>`translate(${d.x},${d.y})`);
+
+  if (Math.floor(simulation.alpha()*100) % 3 === 0) drawHulls();
+});
+
+simulation.on('end', drawHulls);
+
+// ─── HIGHLIGHT ────────────────────────────────────────────────────────────────
+let highlighted = null;
+
+function highlightNode(d) {
+  if (highlighted === d.id) { clearHighlight(); return; }
+  highlighted = d.id;
+
+  const connectedLinks = new Set();
+  const connectedNodes = new Set([d.id]);
+
+  links.forEach(l => {
+    const sid = l.source.id||l.source;
+    const tid = l.target.id||l.target;
+    if (sid===d.id || tid===d.id) {
+      connectedLinks.add(l);
+      connectedNodes.add(sid);
+      connectedNodes.add(tid);
+    }
+  });
+
+  linkSel.attr('class', l => connectedLinks.has(l) ? 'link highlighted' : 'link dimmed');
+  nodeSel.attr('class', n => {
+    if (n.id===d.id) return 'node highlighted';
+    if (connectedNodes.has(n.id)) return 'node highlighted';
+    return 'node dimmed';
+  });
+  labelSel.attr('class', n => connectedNodes.has(n.id) ? 'node-label highlighted' : 'node-label');
+}
+
+function clearHighlight() {
+  highlighted = null;
+  linkSel.attr('class','link');
+  nodeSel.attr('class','node');
+  labelSel.attr('class','node-label');
+}
+
+// ─── FILTER ───────────────────────────────────────────────────────────────────
+function filterGraph() {
+  nodeSel.style('display', d=>activeFiles.has(d.file)?null:'none');
+  linkSel.style('display', d=>{
+    const sn=nodes.find(n=>n.id===(d.source.id||d.source));
+    const tn=nodes.find(n=>n.id===(d.target.id||d.target));
+    return (sn&&activeFiles.has(sn.file)&&tn&&activeFiles.has(tn.file))?null:'none';
+  });
+  drawHulls();
+}
+
+// ─── TOOLTIP ─────────────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(e, d) {
+  const outs = links.filter(l=>(l.source.id||l.source)===d.id).map(l=>l.target.label||l.target.id||l.target);
+  const ins  = links.filter(l=>(l.target.id||l.target)===d.id).map(l=>l.source.label||l.source.id||l.source);
+  const fn = d.label.replace('\n',' ');
+  const cls = CLASSES[d.cls];
+  tooltip.innerHTML = `
+    <div class="tt-name" style="color:${d.color}">${fn}</div>
+    <div class="tt-class">${d.cls} · ${FILES[d.file].label}</div>
+    <div class="tt-calls">
+      <span>→ Gọi ra: </span>${outs.length ? outs.slice(0,5).join(', ')+(outs.length>5?'…':'') : '—'}<br>
+      <span>← Được gọi: </span>${ins.length ? ins.slice(0,5).join(', ')+(ins.length>5?'…':'') : '—'}<br>
+      <span>In-degree: </span>${inDeg[d.id]||0}  <span>Out-degree: </span>${outDeg[d.id]||0}
+    </div>`;
+  tooltip.style.display='block';
+  moveTooltip(e);
+}
+
+function moveTooltip(e) {
+  const x = e.clientX+14, y = e.clientY-10;
+  tooltip.style.left = Math.min(x, window.innerWidth-280)+'px';
+  tooltip.style.top  = Math.max(y, 10)+'px';
+}
+
+function hideTooltip() { tooltip.style.display='none'; }
+
+// ─── CONTROLS ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity);
+});
+
+document.getElementById('btn-labels').addEventListener('click', function() {
+  showLabels = !showLabels;
+  this.textContent = showLabels ? 'LABELS ON' : 'LABELS OFF';
+  labelSel.style('display', showLabels ? null : 'none');
+});
+
+// ─── FIT ON START ─────────────────────────────────────────────────────────────
+setTimeout(() => {
+  const bounds = gAll.node().getBBox();
+  const pad = 40;
+  const scale = Math.min(W()/(bounds.width+pad*2), H()/(bounds.height+pad*2), 1.2);
+  const tx = W()/2 - scale*(bounds.x+bounds.width/2);
+  const ty = H()/2 - scale*(bounds.y+bounds.height/2);
+  svg.call(zoom.transform, d3.zoomIdentity.translate(tx,ty).scale(scale));
+}, 2500);
+</script>
+</body>
+</html>
