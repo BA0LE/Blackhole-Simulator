@@ -8,7 +8,7 @@ A real-time 3D black hole physics simulator built with Python and Pygame, featur
 
 |                                                   |                                                                                     |
 | ------------------------------------------------: | ----------------------------------------------------------------------------------- |
-|               ![](demo\with_2obj.png "with 2 objects") | ![](demo\GasPlanet_get_eaten.png "With one object got effected")                         |
+| ![](demo\with_2obj.png "with 2 objects") | ![](demo\GasPlanet_get_eaten.png "With one object got effected")                         |
 | ![](demo/2_blackhole_merge.png "2 Blackholes merging") | ![](demo\2_blackhole_merge-throw-particles.png "2 blackholes merging &amp; throw particles") |
 
 ---
