@@ -1,0 +1,12 @@
+{
+  "window_width": 1280,
+  "window_height": 720,
+  "target_fps": 60,
+  "fullscreen": false,
+  "vsync": false,
+  "mouse_sensitivity": 0.28,
+  "camera_speed": 250.0,
+  "keybinds": {},
+  "config_panel_width": 420,
+  "hud_scale": 1.0
+}

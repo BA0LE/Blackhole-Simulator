@@ -1,44 +1,4 @@
-"""
-main_v7.py — Black Hole Simulator v7
-
-Controls
-  Mouse drag          Rotate camera
-  W A S D             Move camera  (+ Shift = fast)
-  Space / LCtrl       Camera up / down
-  Arrow keys          Rotate camera
-
-  -- Black Holes ---
-  H                   Spawn BH in front of camera
-  [ / ]               Cycle selected BH
-  M / N               Mass of selected BH  ± 0.05
-  K / J               Spin of selected BH  ± 0.05
-
-  -- Bodies ---------
-  B                   Spawn GasPlanet
-  V                   Spawn CelestialBody
-
-  -- Config panel (Tab)
-  Tab                 Toggle config panel
-  ↑ / ↓              Navigate parameters
-  ← / →              Decrease / Increase selected value
-
-  -- Quick toggles --
-  Z / X               Time Lapse  ± 0.5
-  P                   Physics mode  realistic ↔ 2-body
-  T                   Time dilation camera  ON/OFF
-  E                   Hawking evaporation ON/OFF
-  Y                   Virtual accretion disk ON/OFF
-  C                   Free particles visible  ON/OFF
-  G                   BH gravity  ON/OFF
-  F                   BH mergers  ON/OFF
-  R                   Redshift fading  ON/OFF
-  I                   Particle temp glow  ON/OFF
-  U                   Spaghettification  ON/OFF
-  S                   Realistic stars (3D)  ON/OFF
-  O                   Pause / resume
-  ESC / Q             Quit
-
-"""
+#v7
 import sys, math, random
 import numpy as np
 import pygame
@@ -48,10 +8,12 @@ from camera     import Camera3D
 from simulation import AccretionDisk, FreeParticles, CelestialBody, GasPlanet
 from renderer   import Renderer
 from blackhole  import BlackHoleBody
-from config     import Config, CONFIG_PANEL_PARAMS
+from config     import Config, CONFIG_PANEL_PARAMS, loader
 
-W, H       = 1280, 720
-TARGET_FPS = 60
+settings = loader.settings
+W = int(settings.get("window_width", 1280))
+H = int(settings.get("window_height", 720))
+TARGET_FPS = int(settings.get("target_fps", 60))
 
 
 
@@ -144,7 +106,11 @@ def _on_config_change(param, disk_list, free, rend=None):
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((W, H))
+    flags = pygame.FULLSCREEN if settings.get("fullscreen", False) else 0
+    try:
+        screen = pygame.display.set_mode((W, H), flags, vsync=1 if settings.get("vsync", False) else 0)
+    except TypeError:
+        screen = pygame.display.set_mode((W, H), flags)
     pygame.display.set_caption("Black Hole Simulator 3D  —  v6")
     clock  = pygame.time.Clock()
 
@@ -155,9 +121,13 @@ def main():
     bh_list  = build_initial_bh_list()
     phys.update_properties(bh_list[0].mass, bh_list[0].spin)
 
-    disk_list = [AccretionDisk(bh, n=3200, physics=Physics()) for bh in bh_list]
+    disk_list = [AccretionDisk(bh, n=2500, physics=Physics()) for bh in bh_list]
     free      = FreeParticles(phys, n=360)
     selected  = 0
+
+    # Auto-transfer particles if the current loaded config wants the disk disabled
+    startup_frames_elapsed = 0
+    startup_auto_transfer_needed = not Config.USE_VIRTUAL_ACCRETION_DISK
 
     celestial_objects = [
         GasPlanet(phys, pos=(40,0,700), radius=1.5,
@@ -191,6 +161,15 @@ def main():
                 time_lapse_bh = 1.0 / math.sqrt(max(0.0001, 1.0-r_ratio))
 
         dt = dt_real * Config.TIME_LAPSE * time_lapse_bh
+
+        # Auto-transfer on startup if needed
+        if startup_auto_transfer_needed:
+            startup_frames_elapsed += 1
+            if startup_frames_elapsed > 3:
+                for disk in disk_list:
+                    if disk.n > 0: free.absorb_disk(disk)
+                Config.USE_VIRTUAL_ACCRETION_DISK = False
+                startup_auto_transfer_needed = False
 
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -277,9 +256,9 @@ def main():
                     Config.REALISTIC_STARS = not Config.REALISTIC_STARS
                 if k == pygame.K_y:
                     Config.USE_VIRTUAL_ACCRETION_DISK = not Config.USE_VIRTUAL_ACCRETION_DISK
-                    if not Config.USE_VIRTUAL_ACCRETION_DISK:
-                        for disk in disk_list:
-                            if disk.n > 0: free.absorb_disk(disk)
+                    #if not Config.USE_VIRTUAL_ACCRETION_DISK:
+                    for disk in disk_list:
+                        if disk.n > 0: free.absorb_disk(disk)
 
                 #Spawn
                 if k == pygame.K_h:
@@ -309,12 +288,13 @@ def main():
                 dragging = False
             if ev.type == pygame.MOUSEMOTION and dragging:
                 dx = ev.pos[0]-last_mouse[0];  dy = ev.pos[1]-last_mouse[1]
-                camera.rotate(-dx*0.28, -dy*0.28)
+                sensitivity = float(settings.get("mouse_sensitivity", 0.28))
+                camera.rotate(-dx * sensitivity, -dy * sensitivity)
                 last_mouse = ev.pos
 
         if not panel['visible']:
             keys  = pygame.key.get_pressed()
-            speed = 250.0 * dt_real
+            speed = float(settings.get("camera_speed", 250.0)) * dt_real
             if keys[pygame.K_LSHIFT]: speed *= 3.0
             fwd = right = up = 0
             if keys[pygame.K_w]: fwd   += speed
@@ -330,7 +310,7 @@ def main():
             if keys[pygame.K_DOWN]:  camera.rotate(0, -80*dt_real)
         else:
             keys  = pygame.key.get_pressed()
-            speed = 250.0 * dt_real
+            speed = float(settings.get("camera_speed", 250.0)) * dt_real
             if keys[pygame.K_LSHIFT]: speed *= 3.0
             fwd = right = up = 0
             if keys[pygame.K_w]: fwd   += speed
@@ -340,6 +320,14 @@ def main():
             if keys[pygame.K_SPACE]:  up += speed
             if keys[pygame.K_LCTRL]: up -= speed
             if fwd or right or up: camera.move(right, up, fwd)
+
+            # allow left/right hold to adjust panel values continuously for non-bool params
+            current_param = panel['params'][panel['cursor']]
+            if current_param['type'] in ('float', 'int', 'choice'):
+                if keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
+                    delta = -1 if keys[pygame.K_LEFT] else 1
+                    _panel_adjust(current_param, delta)
+                    _on_config_change(current_param, disk_list, free, rend)
 
         if not paused:
             #Hawking evaporation (dM/dt ∝ 1/M²)
@@ -385,7 +373,7 @@ def main():
                     show_particles, selected, panel)
 
         if paused:
-            msg = rend.font.render("  PAUSED — O to resume  ", True, (255,220,80))
+            msg = rend.font.render("  PAUSED - O to resume  ", True, (255,220,80))
             screen.blit(msg, msg.get_rect(center=(W//2, H-55)))
 
         pygame.display.flip()

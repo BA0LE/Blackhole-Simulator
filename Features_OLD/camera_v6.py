@@ -1,13 +1,14 @@
+#v6
 import numpy as np
 import math
-#v7
+
 
 class Camera3D:
     def __init__(self, pos=(0.0, 240.0, 580.0), pitch=-22.0, yaw=0.0):
         self.position = np.array(pos, dtype=float)
-        self.pitch    = float(pitch)  # degrees, clamped +-88
+        self.pitch    = float(pitch)   # degrees, clamped ±88
         self.yaw      = float(yaw)     # degrees, free
-        self.fov      = 55.0        # vertical field of view in degrees
+        self.fov      = 55.0           # vertical field of view in degrees
 
     def rotate(self, dyaw: float, dpitch: float):
         self.yaw  -= dyaw
@@ -64,7 +65,7 @@ class Camera3D:
 
     def project_batch(self, pts: np.ndarray, W: int, H: int):
         forward, right, up_cam = self._basis()
-        p   = pts - self.position     # (N, 3)
+        p   = pts - self.position           # (N, 3)
         px  = p @ right
         py  = p @ up_cam
         pz  = p @ forward

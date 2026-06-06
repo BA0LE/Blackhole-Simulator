@@ -1,20 +1,9 @@
-"""
-simulation.py — v9
-- PARTICLE_FORCE: inter-particle gravity via cell-list spatial hashing O(N)
-  instead of naive O(N²). Cells of size = 2×softening radius.
-  Realistic: G_eff ≪ BH gravity, only nearest-cell neighbours interact.
-- PARTICLE_AUTO_ZOOM: size ∝ SIM_SCALE / depth (pinhole equation).
-- Branchless equations, minimal branches in hot paths.
-"""
 import numpy as np
 import math
 from physics import Physics
-
-
-# ─── AccretionDisk ───────────────────────────────────────────────────────────
+#v7
 
 class AccretionDisk:
-    """Keplerian thin disk centred on a BlackHoleBody."""
 
     def __init__(self, bh, n: int = 3200, physics: Physics = None):
         self.bh         = bh
@@ -90,17 +79,9 @@ class AccretionDisk:
         c    = np.clip(c.astype(float) * self.gz[:,None] * br, 0, 255).astype(np.uint8)
         return c
 
-
-# ─── FreeParticles ────────────────────────────────────────────────────────────
-
 class FreeParticles:
-    """
-    3-D RK4 integration under multi-BH gravity.
-    Optional PARTICLE_FORCE uses a cell-list for O(N) neighbour search
-    instead of O(N²), so it stays fast even at N=15 000.
-    """
 
-    # cell size for spatial hashing (sim units)
+    #cell size for spatial hashing (sim units)
     _CELL = 3.0
 
     def __init__(self, physics: Physics, n: int = 360):
@@ -134,14 +115,9 @@ class FreeParticles:
         self.size   = rng.uniform(0.8, 2.4, n)
         self.alpha  = np.full(n, 0.75)
 
-    # ── cell-list particle-force ──────────────────────────────────────────────
+    
 
     def _particle_self_accel(self, G_eff: float) -> np.ndarray:
-        """
-        Weak inter-particle gravity using a cell-list (O(N) average).
-        Only particles in the same cell and 26 neighbours interact.
-        Softening ε² = 0.25 sim² prevents singularities.
-        """
         N   = self.n
         if N < 2 or G_eff <= 0.0:
             return np.zeros((N,3), float)
@@ -150,14 +126,14 @@ class FreeParticles:
         # map each particle to integer cell indices
         ci   = np.floor(self.pos / C).astype(int)   # (N,3)
 
-        # build dict: cell_key → list of particle indices
+         # build dict: cell_key → list of particle indices
         cells: dict = {}
         for i, key in enumerate(map(tuple, ci)):
             cells.setdefault(key, []).append(i)
 
         accel = np.zeros((N,3), float)
 
-        # neighbour offsets: 3×3×3 cube = 27 cells (including self)
+        #neighbour offsets: 3×3×3 cube = 27 cells (including self)
         offsets = [(dx,dy,dz)
                    for dx in (-1,0,1)
                    for dy in (-1,0,1)
@@ -165,7 +141,7 @@ class FreeParticles:
 
         for key, members in cells.items():
             kx, ky, kz = key
-            # gather all particles in this cell + neighbours
+            #gather all particles in this cell + neighbours
             nbrs = []
             for dx,dy,dz in offsets:
                 nbrs.extend(cells.get((kx+dx, ky+dy, kz+dz), []))
@@ -174,22 +150,21 @@ class FreeParticles:
             mi  = np.array(members, int)
             nbi = np.array(nbrs,    int)
 
-            # vectorised pairwise within (members, neighbours)
+            #vectorised pairwise within  (members, neighbours)
             pi  = self.pos[mi]   # (M,3)
             pj  = self.pos[nbi]  # (K,3)
 
-            diff = pj[None,:,:] - pi[:,None,:]          # (M,K,3)
-            r2   = np.sum(diff**2, axis=2) + 0.25       # (M,K)
+            diff = pj[None,:,:] - pi[:,None,:]       # (M,K,3)
+            r2   = np.sum(diff**2, axis=2) + 0.25  # (M,K)
             r3   = r2 * np.sqrt(r2)
-            # zero self-pairs  (same index)
-            same = mi[:,None] == nbi[None,:]             # (M,K)
+            # zero self-pairs        (same index)
+            same = mi[:,None] == nbi[None,:]         # (M,K)
             r3   = np.where(same, 1.0, r3)
             w    = np.where(same, 0.0, G_eff / r3)      # (M,K)
             np.add.at(accel, mi, np.einsum('mk,mkd->md', w, diff))
 
         return accel
 
-    # ── integration ───────────────────────────────────────────────────────────
 
     def update(self, dt: float, bh_list: list, speed: float = 5.0):
         if self.n == 0: return
@@ -204,7 +179,7 @@ class FreeParticles:
         def total_accel(p):
             a = Physics.multi_bh_accel(p, bh_list)
             if G_eff > 0.0:
-                # temporarily point self.pos to p for the cell-list
+                  #temporarily point self.pos to p for the cell-list
                 old = self.pos; self.pos = p
                 a   = a + self._particle_self_accel(G_eff)
                 self.pos = old
@@ -221,7 +196,7 @@ class FreeParticles:
             self.pos += (ds/6.0)*(self.vel+2*v2+2*v3+v4)
             self.vel += (ds/6.0)*(a1+2*a2+2*a3+a4)
 
-        # absorption
+        #absorption
         remove = np.zeros(self.n, bool)
         for bh in bh_list:
             if not bh.active: continue
@@ -284,9 +259,6 @@ class FreeParticles:
         depth = np.maximum((self.positions_3d() - camera.position) @ fwd, 0.1)
         base  = getattr(Config, 'PARTICLE_BASE_SIZE', 1.0)
         return self.size * base * self.phys.SIM_SCALE / depth
-
-
-# ─── CelestialBody ────────────────────────────────────────────────────────────
 
 class CelestialBody:
     def __init__(self, physics, pos, radius, color, vel=(0,0,0),
@@ -365,26 +337,27 @@ class CelestialBody:
         pos_sim   += self.vel*dt_sim
         self.pos   = pos_sim*self.phys.SIM_SCALE
 
-    def get_silhouette_points(self, camera, n_points=40):
+    def get_silhouette_points(self, camera, n_points=50):
+        """Return 3D world-space circle points. Lensing distortion is applied in the renderer."""
         if not self.active: return None
         d    = self.pos - camera.position
         dist = np.linalg.norm(d)
         if dist < 1e-5: return None
         fwd  = d / dist
-        up   = np.array([0.0,1.0,0.0])
-        if abs(np.dot(fwd,up)) > 0.99: up = np.array([1.0,0.0,0.0])
-        right  = np.cross(fwd,up); right /= np.linalg.norm(right)
-        up_cam = np.cross(right,fwd)
-        theta  = np.linspace(0,2*np.pi,n_points,endpoint=False)
-        return (self.pos[None,:]
-                + (right[None,:]*np.cos(theta)[:,None]
-                   +up_cam[None,:]*np.sin(theta)[:,None])*self.r_px)
+        up   = np.array([0.0, 1.0, 0.0])
+        if abs(np.dot(fwd, up)) > 0.99:
+            up = np.array([1.0, 0.0, 0.0])
+        right  = np.cross(fwd, up);  right /= np.linalg.norm(right)
+        up_cam = np.cross(right, fwd)
+        theta  = np.linspace(0, 2*np.pi, n_points, endpoint=False)
+        # Pure circle — lensing distortion is applied in renderer._draw_celestial_body
+        return (self.pos[None, :]
+                + (right[None, :] * np.cos(theta)[:, None]
+                   + up_cam[None, :] * np.sin(theta)[:, None]) * self.r_px)
 
-
-# ─── GasPlanet ────────────────────────────────────────────────────────────────
+# GasPlanet
 
 class GasPlanet(CelestialBody):
-    """Tidal spaghettification + comet-tail debris."""
 
     def update(self, dt, speed=5.0, free_system=None, bh_list=None):
         if not self.active: return

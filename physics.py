@@ -1,6 +1,4 @@
-"""
-physics.py — v6: Schwarzschild / Kerr physics helpers.
-"""
+#v7
 import numpy as np
 import sys, math
 sys.path.insert(0, '.')
@@ -141,24 +139,27 @@ class Physics(Computer):
     def lens_all(self, sx, sy, cx, cy, theta_E, shadow_r_px):
         θE   = theta_E
         dx   = sx-cx;  dy = sy-cy
+        # Clamp β ≥ 0.5 like v6 — ensures |θn| is never numerically zero,
+        # so p2 is always correctly positioned on the opposite side of the BH.
         β    = np.maximum(np.sqrt(dx*dx+dy*dy), 0.5)
         nx   = dx/β;   ny = dy/β
         disc = np.sqrt(β*β + 4*θE*θE)
-        θp   = (β+disc)*0.5;  θn = (β-disc)*0.5
+        θp   = (β+disc)*0.5;  θn = (β-disc)*0.5   # θn < 0  → p2 on opposite side
         p1x  = cx+nx*θp;  p1y = cy+ny*θp
         p2x  = cx+nx*θn;  p2y = cy+ny*θn
         u    = np.maximum(β/θE, 0.01)
         tmp  = (u*u+2)/(2*u*np.sqrt(u*u+4))
         mu1  = np.minimum(tmp+0.5, 12.0)
         mu2  = np.minimum(np.maximum(tmp-0.5, 0.02), 6.0)
-        d2   = np.sqrt((p2x-cx)**2+(p2y-cy)**2)
+        # d2 = |θn| = distance from BH centre to p2 (since nx,ny is unit vector)
+        d2   = np.abs(θn)
         vis2 = d2 > shadow_r_px + 2.0
         return p1x, p1y, p2x, p2y, mu1, mu2, vis2
 
     def lens_stars(self, sx, sy, cx, cy, theta_E):
         θE = theta_E
         dx = sx-cx;  dy = sy-cy
-        β  = np.maximum(np.sqrt(dx*dx+dy*dy), 0.5)
+        β  = np.maximum(np.sqrt(dx*dx+dy*dy), 0.5)   # clamp like v6
         nx = dx/β;   ny = dy/β
         θp = (β+np.sqrt(β*β+4*θE*θE))*0.5
         u  = np.maximum(β/θE, 0.01)

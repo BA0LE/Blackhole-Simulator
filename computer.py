@@ -1,9 +1,9 @@
 from scipy.interpolate import CubicSpline, splprep, splev
 import numpy as np
 from config import Config
-
+#v7
 class Computer():
-    #physic
+    # physic
     def __init__(self):
         self.G = Config.G_SI
         self.c = Config.C_SI

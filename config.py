@@ -1,63 +1,7 @@
-# config.py — v8
-class Config:
-    G_SI = 6.67430e-11
-    C_SI = 299792458
-    G    = 1.0
-    C    = 1.0
+#v7.1
 
-    M_BH   = 0.5
-    SPIN_A = 0.0
-
-    INITIAL_BLACK_HOLES = [
-        dict(pos=(0,0,0), vel=(0,0,0), mass=0.5, spin=0.0),
-    ]
-    RANDOM_BH_COUNT = None
-
-    SIM_SCALE = 55.0
-
-    BH_GRAVITY_ON  = True
-    BH_MERGERS_ON  = True
-
-    DISK_BRIGHTNESS             = 1.5
-    GLOBAL_BRIGHTNESS           = 1.0
-    DISK_PARTICLE_COUNT         = 15000
-    STAR_COUNT                  = 3400
-
-    USE_VIRTUAL_ACCRETION_DISK  = True
-    PLANET_SPAGHETTIFICATION    = True
-    PARTICLE_TEMP_GLOW          = True
-    REALISTIC_STARS             = True
-    PHYSICS_MODE                = "realistic"
-    TIME_LAPSE                  = 1.0
-    ENABLE_TIME_DILATION_CAMERA   = True
-    ENABLE_REDSHIFT_FADING        = True
-    ENABLE_TIME_DILATION_OBJECTS  = True
-
-    PLANET_COHESION         = 1.0
-    GAS_EMISSION_RATE       = 2.0
-    ROCHE_LIMIT_BASE        = 15.0
-    PARTICLE_PLUNGE_FACTOR  = 1.0
-    OBJECT_GRAVITY          = True
-    ENERGY_LOST             = True
-
-    ORBIT_ENERGY_DECAY       = 0.010
-    MULTI_BODY_NOISE         = 0.002
-    PARTICLE_DYNAMICS_NOISE  = 0.04
-    HAWKING_EVAPORATION_RATE = 0.0001
-    GR_CURVATURE_EFFECT      = True
-    BH_SPIN_LENSE_THIRRING   = True
-
-    ACCRETION_DM_PARTICLE = 0.00005
-    ACCRETION_DM_BODY     = 0.005
-
-    # inter-particle gravity (weak, realistic pressure-free gas)
-    PARTICLE_FORCE        = False
-    PARTICLE_FORCE_STRENGTH = 0.0008   # G_eff for particle-particle attraction
-
-    # scale particle draw-size by depth (perspective consistent)
-    PARTICLE_AUTO_ZOOM    = True
-    PARTICLE_BASE_SIZE    = 1.0        # reference size at SIM_SCALE distance
-
+from Loader import Config, loader   # noqa: F401
+Settings = loader.settings
 
 CONFIG_PANEL_PARAMS = [
     dict(name="Time Lapse",              attr="TIME_LAPSE",
@@ -87,7 +31,7 @@ CONFIG_PANEL_PARAMS = [
     dict(name="Star Count",              attr="STAR_COUNT",
          type="int", min=0, max=15000, step=500,        unit="★"),
     dict(name="Disk Particle Count",     attr="DISK_PARTICLE_COUNT",
-         type="int", min=0, max=15000, step=500,        unit="pts"),
+         type="int", min=0, max=150000, step=500,        unit="pts"),
     dict(name="Virtual Accretion Disk",  attr="USE_VIRTUAL_ACCRETION_DISK", type="bool"),
     dict(name="Realistic Stars (3D)",    attr="REALISTIC_STARS",            type="bool"),
     dict(name="Redshift Fading",         attr="ENABLE_REDSHIFT_FADING",     type="bool"),
@@ -101,11 +45,21 @@ CONFIG_PANEL_PARAMS = [
          type="float", min=0.1, max=10.0, step=0.1,    unit="×"),
     dict(name="Plunge Factor",           attr="PARTICLE_PLUNGE_FACTOR",
          type="float", min=0.0, max=2.0, step=0.1,     unit="×"),
-    # --- new ---
     dict(name="Particle Force",          attr="PARTICLE_FORCE",             type="bool"),
     dict(name="Particle Force Strength", attr="PARTICLE_FORCE_STRENGTH",
          type="float", min=0.0, max=0.01, step=0.0001, unit="G_eff"),
     dict(name="Particle Auto-Zoom",      attr="PARTICLE_AUTO_ZOOM",         type="bool"),
     dict(name="Particle Base Size",      attr="PARTICLE_BASE_SIZE",
          type="float", min=0.1, max=5.0, step=0.1,     unit="px"),
+    dict(name="Real Light Bend (Donut)", attr="REAL_LIGHT_BEND",            type="bool"),
+    dict(name="Render Distance (0=Inf)", attr="RENDER_DISTANCE",
+         type="float", min=0.0, max=50.0, step=1.0,    unit="R_s"),
+    dict(name="Random Particle Size",    attr="RANDOM_PARTICLE_SIZE",       type="bool"),
+    dict(name="Min Random Size",         attr="MIN_SIZE_RANDOM",
+         type="float", min=0.1, max=3.0, step=0.1,     unit="px"),
+    dict(name="Max Random Size",         attr="MAX_SIZE_RANDOM",
+         type="float", min=1.0, max=8.0, step=0.1,     unit="px"),
+    dict(name="Brightness By Velocity",  attr="BRIGHTNESS_BY_VELOCITY",     type="bool"),
+    dict(name="Particle Absorber",       attr="PARTICLE_ABSORBER",          type="bool"),
+    dict(name="Show Physical Units",     attr="SHOW_UNIT",                  type="bool"),
 ]
